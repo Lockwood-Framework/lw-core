@@ -139,4 +139,4 @@ exports['lw-core']:GetSessionData()                      -- { license2, name, gr
 
 ## Copyright
 
-Copyright 2026 Morgrhim. All rights reserved.
+Licensed under the [Rangeland Public License v1.0](LICENSE) — use it, modify it, don't sell it, don't ship it..
