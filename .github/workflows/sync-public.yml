@@ -1,0 +1,24 @@
+name: Mirror to Public
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  mirror:
+    name: Push to lockwood-framework/${{ github.event.repository.name }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to public mirror
+        env:
+          TOKEN: ${{ secrets.LW_PUBLIC_PUSH_TOKEN }}
+        run: |
+          REPO="${GITHUB_REPOSITORY##*/}"
+          git remote add public "https://x-access-token:${TOKEN}@github.com/lockwood-framework/${REPO}.git"
+          git push public main --force
