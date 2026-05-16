@@ -10,23 +10,23 @@ LWCore = {}
 -- ---------------------------------------------------------------------------
 -- Database migration
 -- ---------------------------------------------------------------------------
-AddEventHandler('lw-db:ready', function()
-    exports['lw-db']:RegisterMigration(
-        'lw-core',
-        '001_create_players',
-        [[
-            CREATE TABLE IF NOT EXISTS `lw_players` (
-                `license2`   VARCHAR(60)  NOT NULL,
-                `name`       VARCHAR(255) NOT NULL,
-                `group`      VARCHAR(64)  NOT NULL DEFAULT 'lw.user',
-                `created_at` TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                `last_seen`  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (`license2`),
-                KEY `idx_group` (`group`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    )
+exports['lw-db']:RegisterMigration(
+    'lw-core',
+    '001_create_players',
+    [[
+        CREATE TABLE IF NOT EXISTS `lw_players` (
+            `license2`   VARCHAR(60)  NOT NULL,
+            `name`       VARCHAR(255) NOT NULL,
+            `group`      VARCHAR(64)  NOT NULL DEFAULT 'lw.user',
+            `created_at` TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `last_seen`  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`license2`),
+            KEY `idx_group` (`group`)
+        )
+    ]]
+)
 
+AddEventHandler('lw-db:ready', function()
     CreateThread(function()
         LWCore.OnDBReady()
     end)
