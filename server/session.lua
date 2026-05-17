@@ -178,10 +178,9 @@ exports('GetPlayerCount', function()
 end)
 
 exports('GetOfflinePlayer', function(license2)
-    local row = DB.single(
-        'SELECT `license2`, `name`, `group`, `created_at`, `last_seen` FROM `lw_players` WHERE `license2` = ? LIMIT 1',
-        { license2 }
-    )
+    local results = DB.query('SELECT `license2`, `name`, `group`, `created_at`, `last_seen` FROM `lw_players` WHERE `license2` = ? LIMIT 1', { license2 })
+    local row = results and results[1]
+    
     return row or nil
 end)
 

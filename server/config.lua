@@ -21,23 +21,23 @@ Config.StateIdRandomLength = 13
 -- Groups
 -- ---------------------------------------------------------------------------
 -- The group assigned to any player whose license2 is not in PlayerGroups.
-Config.DefaultGroup = 'lw.user'
+Config.DefaultGroup = 'lw-user'
 
 -- All valid server groups. Used for validation and ACE principal assignment.
 -- Hierarchy is defined in the server ACE config, not here.
 Config.Groups = {
-    'lw.user',
-    'lw.mod',
-    'lw.admin',
-    'lw.dev',
-    'lw.superadmin',
+    'lw-user',
+    'lw-mod',
+    'lw-admin',
+    'lw-dev',
+    'lw-superadmin',
 }
 
 -- Map a player's license2 identifier to a specific group.
 -- Players not listed here receive Config.DefaultGroup.
 -- Format: ['license2:XXXX'] = 'lw.superadmin'
 Config.PlayerGroups = {
-    ['license2:dd39ad26cf8b67f1a2cabed316bb59f7aafd7e33'] = 'lw.superadmin'
+    ['license2:dd39ad26cf8b67f1a2cabed316bb59f7aafd7e33'] = 'lw-superadmin'
 }
 
 -- ---------------------------------------------------------------------------

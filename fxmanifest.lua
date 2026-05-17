@@ -18,12 +18,16 @@ server_scripts {
     'server/callbacks.lua',  -- server-side callback registration and dispatch
     'server/save.lua',       -- periodic last_seen flush and playerDropped save
     'server/lifecycle.lua',  -- playerConnecting, playerDropped, client-ready handler
+    'server/zones.lua',
 }
 
 client_scripts {
+    'client/config.lua',
     'client/main.lua',       -- client-ready handshake and client-side callback triggers
+    'client/zones.lua',
 }
 
 dependencies {
     'lw-db',
+    'lw-shared'
 }
