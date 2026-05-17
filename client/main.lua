@@ -1,4 +1,4 @@
--- Copyright 2026 Morgrhim. All rights reserved.
+
 
 -- ---------------------------------------------------------------------------
 -- Client-side core
