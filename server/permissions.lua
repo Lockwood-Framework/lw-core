@@ -1,5 +1,3 @@
-
-
 -- ---------------------------------------------------------------------------
 -- Permissions API
 -- Wraps the CFX ACE system into a centralized, resource-aware API.
@@ -13,7 +11,8 @@
 
 -- ---------------------------------------------------------------------------
 -- Permission registry
--- Keyed by resource name. Each entry is a table of { [permString] = { roles } }
+-- Keyed by resource name. Each entry is a table of { [permString] = { conditions } }
+-- where each condition is a table with at minimum a `type` string field.
 -- Cleared automatically when a resource stops.
 -- ---------------------------------------------------------------------------
 local _registry = {}
@@ -27,55 +26,32 @@ local _contributors = {}
 
 -- ---------------------------------------------------------------------------
 -- Per-source contributor state
--- Tracks pending role contributions for each player during character selection.
+-- Tracks pending permission contributions for each player during character selection.
 -- Keyed by source. Each entry:
---   roles     : table  — accumulated role strings from all contributors
+--   roles     : table  — accumulated permission name strings from all contributors
 --   pending   : table  — set of contributor resource names not yet done
 --   timer     : number — Citizen.SetTimeout handle for the fallback timeout
 -- ---------------------------------------------------------------------------
 local _pending = {}
 
 -- ---------------------------------------------------------------------------
--- Internal: flatten the registry into a role→perms lookup
--- Builds { [role] = { perm1, perm2, ... } } across all registered resources.
--- Called once per character selection, not cached — registry may change between
--- characters if resources restart.
+-- Internal: apply ACE grants for a resolved set of permissions.
+-- Contributors now evaluate conditions themselves and pass permission name
+-- strings directly via GrantRoles — no role→perm mapping needed here.
 -- ---------------------------------------------------------------------------
-local function buildRolePermMap()
-    local map = {}
-    for _, perms in pairs(_registry) do
-        for perm, roles in pairs(perms) do
-            for _, role in ipairs(roles) do
-                if not map[role] then map[role] = {} end
-                map[role][#map[role] + 1] = perm
-            end
-        end
-    end
-    return map
-end
-
--- ---------------------------------------------------------------------------
--- Internal: apply ACE grants for a resolved set of roles
--- ---------------------------------------------------------------------------
-local function applyPermissions(source, roles)
+local function applyPermissions(source, permissions)
     local session = LWCore.Sessions[source]
     if not session then return end
 
-    local map = buildRolePermMap()
     local granted = {}
 
-    for _, role in ipairs(roles) do
-        local perms = map[role]
-        if perms then
-            for _, perm in ipairs(perms) do
-                if not granted[perm] then
-                    granted[perm] = true
-                    ExecuteCommand(string.format(
-                        'add_ace identifier.license2:%s %s allow',
-                        session.license2, perm
-                    ))
-                end
-            end
+    for _, perm in ipairs(permissions) do
+        if not granted[perm] then
+            granted[perm] = true
+            ExecuteCommand(string.format(
+                'add_ace identifier.license2:%s %s allow',
+                session.license2, perm
+            ))
         end
     end
 end
@@ -148,16 +124,15 @@ function LWCore.RevokeCharacterPermissions(source)
     local session = LWCore.Sessions[source]
     if not session then return end
 
-    local map = buildRolePermMap()
     local revoked = {}
 
-    for _, perms in pairs(map) do
-        for _, perm in ipairs(perms) do
-            if not revoked[perm] then
-                revoked[perm] = true
+    for _, perms in pairs(_registry) do
+        for permName in pairs(perms) do
+            if not revoked[permName] then
+                revoked[permName] = true
                 ExecuteCommand(string.format(
                     'remove_ace identifier.license2:%s %s allow',
-                    session.license2, perm
+                    session.license2, permName
                 ))
             end
         end
@@ -201,13 +176,52 @@ end
 
 -- RegisterPermissions
 -- Called by a resource on start to declare its permission domain.
--- perms format: { ['resource.permname'] = { 'role1', 'role2' } }
+--
+-- perms format: { ['resource.permname'] = { conditions } }
+-- Each condition is a table with at minimum a `type` string field and a `value` field.
+-- Multiple conditions on one permission use OR logic — any passing condition
+-- grants the permission. Evaluation is performed by contributor resources via
+-- GetConditionsForType, not by lw-core itself.
+--
+-- Example:
+--   exports['lw-core']:RegisterPermissions('lw-medicine', {
+--       ['medicine.licensed'] = {
+--           { type = 'org_role', value = 'doctor'      },
+--           { type = 'org_role', value = 'field_medic' },
+--       },
+--   })
 exports('RegisterPermissions', function(resourceName, perms)
     if type(perms) ~= 'table' then
         print('[lw-core] RegisterPermissions: invalid perms table from "' .. tostring(resourceName) .. '"')
         return
     end
-    _registry[resourceName] = perms
+
+    local validated = {}
+
+    for permName, conditions in pairs(perms) do
+        if type(permName) ~= 'string' then
+            print(string.format('[lw-core] RegisterPermissions: permission name must be a string (resource: %s)', resourceName))
+        elseif type(conditions) ~= 'table' then
+            print(string.format('[lw-core] RegisterPermissions: conditions for "%s" must be a table (resource: %s)', permName, resourceName))
+        else
+            local valid = true
+            for i, condition in ipairs(conditions) do
+                if type(condition) ~= 'table' or type(condition.type) ~= 'string' then
+                    print(string.format(
+                        '[lw-core] RegisterPermissions: condition %d for "%s" must be a table with a string `type` field (resource: %s)',
+                        i, permName, resourceName
+                    ))
+                    valid = false
+                    break
+                end
+            end
+            if valid then
+                validated[permName] = conditions
+            end
+        end
+    end
+
+    _registry[resourceName] = validated
 end)
 
 -- RegisterPermissionContributor
@@ -261,6 +275,48 @@ end)
 -- IsPlayerAdmin
 exports('IsPlayerAdmin', function(source)
     return IsPlayerAceAllowed(source, 'lw-core.admin')
+end)
+
+-- GetConditionsForType
+-- Returns all registered permissions that have at least one condition of the
+-- given type, along with only the matching conditions for that type.
+--
+-- Contributor resources call this on lw-core:characterSelected to know which
+-- permissions fall within their domain to evaluate. Each contributor only
+-- handles condition types it owns — lw-organizations-api handles 'org_role'
+-- and 'rank', other resources handle their own types.
+--
+-- Returns an array of:
+--   { permission = string, resource = string, conditions = table[] }
+--
+-- Example:
+--   local entries = exports['lw-core']:GetConditionsForType('org_role')
+--   for _, entry in ipairs(entries) do
+--       -- entry.permission = 'medicine.licensed'
+--       -- entry.conditions = { { type = 'org_role', value = 'doctor' }, ... }
+--   end
+exports('GetConditionsForType', function(conditionType)
+    local results = {}
+
+    for resourceName, perms in pairs(_registry) do
+        for permName, conditions in pairs(perms) do
+            local matching = {}
+            for _, condition in ipairs(conditions) do
+                if condition.type == conditionType then
+                    matching[#matching + 1] = condition
+                end
+            end
+            if #matching > 0 then
+                results[#results + 1] = {
+                    permission = permName,
+                    resource   = resourceName,
+                    conditions = matching,
+                }
+            end
+        end
+    end
+
+    return results
 end)
 
 -- ---------------------------------------------------------------------------
