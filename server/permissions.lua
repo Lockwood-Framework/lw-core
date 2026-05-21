@@ -28,9 +28,9 @@ local _contributors = {}
 -- Per-source contributor state
 -- Tracks pending permission contributions for each player during character selection.
 -- Keyed by source. Each entry:
---   roles     : table  — accumulated permission name strings from all contributors
---   pending   : table  — set of contributor resource names not yet done
---   timer     : number — Citizen.SetTimeout handle for the fallback timeout
+--   permissions : table  — accumulated permission name strings from all contributors
+--   pending     : table  — set of contributor resource names not yet done
+--   timer       : number — Citizen.SetTimeout handle for the fallback timeout
 -- ---------------------------------------------------------------------------
 local _pending = {}
 
@@ -80,7 +80,7 @@ local function commitPermissions(source, reason)
         ))
     end
 
-    applyPermissions(source, state.roles)
+    applyPermissions(source, state.permissions)
     _pending[source] = nil
 
     TriggerEvent('lw-core:permissionsApplied', source, reason)
@@ -162,9 +162,9 @@ function LWCore.BeginPermissionCollection(source)
     end
 
     _pending[source] = {
-        roles   = {},
-        pending = pending,
-        timer   = Citizen.SetTimeout(Config.PermissionTimeout, function()
+        permissions = {},
+        pending     = pending,
+        timer       = Citizen.SetTimeout(Config.PermissionTimeout, function()
             commitPermissions(source, 'timeout')
         end),
     }
@@ -234,11 +234,12 @@ exports('RegisterPermissionContributor', function(resourceName)
 end)
 
 -- GrantRoles
--- Called by a contributor when it has resolved the character's roles.
--- Roles are accumulated immediately. ACE grants are NOT applied per-call —
+-- Called by a contributor when it has evaluated its conditions and resolved
+-- which permissions the character should receive.
+-- Permissions are accumulated immediately. ACE grants are NOT applied per-call —
 -- they are applied once all contributors have called DoneContributing or
 -- the timeout fires, to avoid partial-grant states during resolution.
-exports('GrantRoles', function(source, roles)
+exports('GrantRoles', function(source, permissions)
     local state = _pending[source]
     if not state then
         print(string.format(
@@ -248,8 +249,8 @@ exports('GrantRoles', function(source, roles)
         return
     end
 
-    for _, role in ipairs(roles) do
-        state.roles[#state.roles + 1] = role
+    for _, perm in ipairs(permissions) do
+        state.permissions[#state.permissions + 1] = perm
     end
 end)
 
